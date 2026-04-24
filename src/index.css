@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  
+  --color-brand-primary: #3b82f6; /* Modern Blue */
+  --color-brand-accent: #8b5cf6; /* Purple */
+  --color-brand-bg: #020617; /* Deep Slate */
+  --color-brand-surface: rgba(15, 23, 42, 0.6);
+  --color-brand-border: rgba(255, 255, 255, 0.08);
+}
+
+@layer base {
+  html, body {
+    @apply overflow-x-hidden max-w-full m-0 p-0;
+    width: 100vw;
+    position: relative;
+    touch-action: pan-y;
+  }
+
+  body {
+    @apply bg-brand-bg text-slate-200 font-sans antialiased selection:bg-brand-primary selection:text-white;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-white;
+  }
+}
+
+.glass {
+  @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] shadow-2xl;
+}
+
+.glass-card {
+  @apply bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-3xl p-8 transition-all duration-500 hover:border-white/[0.15] hover:bg-white/[0.05];
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-linear-to-br from-white via-slate-200 to-slate-400;
+}
+
+.bg-blob {
+  @apply absolute -z-10 blur-[120px] rounded-full opacity-20 animate-pulse;
+}
+
+.btn-primary {
+  @apply relative px-8 py-3 rounded-full bg-brand-primary text-white font-semibold transition-all hover:scale-105 active:scale-95 shadow-lg shadow-brand-primary/20 overflow-hidden;
+}
+
+.btn-primary::after {
+  content: '';
+  @apply absolute inset-0 bg-linear-to-r from-transparent via-white/20 to-transparent -translate-x-full transition-transform duration-1000;
+}
+
+.btn-primary:hover::after {
+  @apply translate-x-full;
+}
+
+.label-micro {
+  @apply text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold;
+}

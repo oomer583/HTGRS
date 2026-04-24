@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Portfolyo projesi",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Proje adı"
+        },
+        "description": {
+          "type": "string",
+          "description": "Proje açıklaması"
+        },
+        "image": {
+          "type": "string",
+          "description": "Proje resim (Base64)"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Proje etiketleri"
+        },
+        "github": {
+          "type": "string",
+          "format": "uri",
+          "description": "GitHub bağlantısı"
+        },
+        "link": {
+          "type": "string",
+          "format": "uri",
+          "description": "Canlı link"
+        },
+        "order": {
+          "type": "number",
+          "description": "Sıralama"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["title", "description", "image"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Projeler koleksiyonu"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Projects collection
+    match /projects/{projectId} {
+      // Publicly readable
+      allow read: if true;
+      
+      // Write access for admin (In this simple template, we allow writes but with strict validation)
+      // Ideally, this should be restricted via Firebase Auth for real production use.
+      allow create: if isValidProject(request.resource.data);
+      allow update: if isValidProject(request.resource.data);
+      allow delete: if true; // In a real app, restrict this
+    }
+
+    // Users and their projects
+    match /users/{uid}/projects/{projectId} {
+      allow read: if true;
+      allow write: if true; // In a real app, restrict to owner or admin
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll(['title', 'description', 'image']) &&
+             data.title is string && data.title.size() <= 100 &&
+             data.description is string && data.description.size() <= 1000 &&
+             data.image is string && data.image.size() <= 1500000 && // Allowing room for Base64 (approx 1MB)
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
+             (!('order' in data) || (data.order is number));
+    }
+  }
+}
