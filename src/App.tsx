@@ -12,44 +12,55 @@ import { Contact } from './components/Contact';
 import { Footer } from './components/Footer';
 import { AnimatedBackground } from './components/AnimatedBackground';
 import { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import { initialProjects, Project } from './data/projects';
 
 import { AdminModal } from './components/AdminModal';
+import { ProjectFolder } from './components/ProjectFolder';
 
 export default function App() {
-  const [projects, setProjects] = useState<any[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isFolderOpen, setIsFolderOpen] = useState(false);
 
   useEffect(() => {
-    console.log('Firestore listener başlatılıyor...');
-    const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      console.log('Firestore snapshot alındı, doküman sayısı:', snapshot.docs.length);
-      const projectsData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        if (!doc.id) console.error("HATA: doc.id bulunamadı!", doc);
-        return {
-          id: doc.id,
-          ...data
-        };
-      });
-      console.log("Mevcut Proje ID'leri:", projectsData.map(p => p.id));
-      setProjects(projectsData);
-      setLoading(false);
-    }, (error) => {
-      console.error('Firestore listener hatası:', error);
-    });
+    const fetchProjects = async () => {
+      try {
+        const response = await fetch('/api/projects');
+        if (response.ok) {
+          const data = await response.json();
+          setProjects(data);
+        } else {
+          // Fallback to localStorage if API fails partially
+          const savedProjects = localStorage.getItem('my_portfolio_projects');
+          if (savedProjects) setProjects(JSON.parse(savedProjects));
+          else setProjects(initialProjects);
+        }
+      } catch (error) {
+        console.error('Failed to fetch projects:', error);
+        const savedProjects = localStorage.getItem('my_portfolio_projects');
+        if (savedProjects) setProjects(JSON.parse(savedProjects));
+        else setProjects(initialProjects);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return () => unsubscribe();
+    fetchProjects();
   }, []);
+
+  // Sync projects with localStorage as secondary backup if needed
+  useEffect(() => {
+    if (projects.length > 0) {
+      localStorage.setItem('my_portfolio_projects', JSON.stringify(projects));
+    }
+  }, [projects]);
 
   return (
     <div className="min-h-screen bg-brand-bg selection:bg-brand-primary selection:text-white overflow-x-hidden">
       <AnimatedBackground />
       
-      <Navbar />
+      <Navbar onOpenFolder={() => setIsFolderOpen(true)} />
       <main className="relative z-10">
         <Hero />
         <About />
@@ -64,6 +75,12 @@ export default function App() {
         onClose={() => setIsAdminOpen(false)} 
         existingProjects={projects} 
         setExistingProjects={setProjects}
+      />
+
+      <ProjectFolder 
+        isOpen={isFolderOpen}
+        onClose={() => setIsFolderOpen(false)}
+        projects={projects}
       />
     </div>
   );

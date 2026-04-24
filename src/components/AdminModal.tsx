@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { X, Lock, Plus, Trash2, Layout, Image as ImageIcon, Type, AlignLeft, Pencil } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDocs, query, collectionGroup, where, getDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
-import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
+import { Project } from '../data/projects';
 
 interface AdminModalProps {
   isOpen: boolean;
   onClose: () => void;
-  existingProjects: any[];
-  setExistingProjects: React.Dispatch<React.SetStateAction<any[]>>;
+  existingProjects: Project[];
+  setExistingProjects: React.Dispatch<React.SetStateAction<Project[]>>;
 }
 
 export function AdminModal({ isOpen, onClose, existingProjects, setExistingProjects }: AdminModalProps) {
@@ -107,7 +105,7 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
     }
   };
 
-  const startEditing = (project: any) => {
+  const startEditing = (project: Project) => {
     setEditingId(project.id);
     setFormData({
       title: project.title,
@@ -132,24 +130,39 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
     setLoading(true);
     try {
       const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag !== '');
-      const currentUid = auth.currentUser?.uid;
       
+      const projectData = {
+        ...formData,
+        tags: tagsArray,
+        order: editingId ? undefined : existingProjects.length,
+        uid: 'user-admin-1' // Mocked UID for persistence demo
+      };
+
       if (editingId) {
-        await updateDoc(doc(db, 'projects', editingId), {
-          ...formData,
-          tags: tagsArray,
-          uid: currentUid // Save UID if available
+        const response = await fetch(`/api/projects/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData)
         });
-        alert('Proje güncellendi!');
+        
+        if (response.ok) {
+          setExistingProjects(prev => prev.map(p => 
+            p.id === editingId ? { ...p, ...formData, tags: tagsArray } : p
+          ));
+          alert('Proje dosyada güncellendi!');
+        }
       } else {
-        await addDoc(collection(db, 'projects'), {
-          ...formData,
-          tags: tagsArray,
-          order: existingProjects.length,
-          createdAt: serverTimestamp(),
-          uid: currentUid // Save UID if available
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(projectData)
         });
-        alert('Proje eklendi!');
+
+        if (response.ok) {
+          const newProject = await response.json();
+          setExistingProjects(prev => [newProject, ...prev]);
+          alert('Proje dosyaya eklendi!');
+        }
       }
 
       setEditingId(null);
@@ -170,73 +183,48 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, project: any) => {
+  const handleDelete = async (e: React.MouseEvent, projectId: string) => {
     e.preventDefault();
     e.stopPropagation();
     
-    console.log("Silme işlemi tetiklendi. Proje verisi:", project);
-    const projectId = project.id;
-    console.log("Hedef Document ID:", projectId);
+    console.log("--- DOSYA TABANLI SİLME BAŞLATILDI ---");
+    console.log("Hedef ID:", projectId);
 
-    if (!projectId) {
-      console.error("HATA: project.id undefined veya null. Firestore document ID eksik!");
-      alert("Hata: Proje ID bulunamadı. Silme işlemi durduruldu.");
+    const projectToDelete = existingProjects.find(p => String(p.id) === String(projectId)) as any;
+    if (!projectToDelete) {
+      alert("Hata: Proje listede bulunamadı.");
       return;
     }
 
-    const ok = window.confirm(`"${project.title || 'Bu projeyi'}" silmek istediğinize emin misiniz?`);
-    if (!ok) return;
+    const isConfirmed = window.confirm(`"${projectToDelete.title}" projesini ve tüm verilerini KAYNAK DOSYADAN kalıcı olarak silmek istediğinize emin misiniz?`);
     
-    setLoading(true);
-    
-    try {
-      console.log("--- DEBUG SİLME ÖNCESİ ---");
-      console.log("Firebase projectId:", firebaseConfig.projectId);
-      console.log("Firestore databaseId:", firebaseConfig.firestoreDatabaseId || "(default)");
-      console.log("Hedef Document ID:", projectId);
-      console.log("Silinen path:", `projects/${projectId}`);
-      console.log("--------------------------");
-
-      // 1. Global projects koleksiyonundan silmeyi dene
-      const globalRef = doc(db, "projects", projectId);
-      await deleteDoc(globalRef);
-      console.log("Global deleteDoc tamamlandı. Doğrulama yapılıyor...");
-      
-      // VERIFICATION
-      const checkDoc = await getDoc(globalRef);
-      console.log("Global silme sonrası döküman var mı?", checkDoc.exists());
-
-      // 2. Kullanıcı alt koleksiyonundan silmeyi dene (Eğer veri varsa)
-      const uidFromProject = project.uid || project.userId;
-      if (uidFromProject) {
-        console.log(`Kullanıcı (${uidFromProject}) alt koleksiyonu taranıyor...`);
-        const userProjectRef = doc(db, "users", uidFromProject, "projects", projectId);
-        await deleteDoc(userProjectRef);
+    if (isConfirmed) {
+      setLoading(true);
+      try {
+        const uid = projectToDelete.uid || projectToDelete.userId || 'user-admin-1';
+        console.log(`Backend'e gidiliyor... UID: ${uid}, ProjectID: ${projectId}`);
         
-        const checkUserDoc = await getDoc(userProjectRef);
-        console.log("Alt koleksiyon silme sonrası döküman var mı?", checkUserDoc.exists());
-      }
+        const response = await fetch(`/api/projects/${uid}/${projectId}`, {
+          method: 'DELETE'
+        });
 
-      // 3. UI listesinden kaldır (Optimistic update)
-      if (setExistingProjects) {
-        setExistingProjects(prev => prev.filter(p => p.id !== projectId));
-      }
+        const result = await response.json();
+        console.log("Backend Yanıtı:", result);
 
-      console.log("SİLME BAŞARILI. ID:", projectId);
-      alert("Proje başarıyla silindi!");
-    } catch (error: any) {
-      console.error("Firestore silme hatası yakalandı!", error);
-      console.error("Hata Kodu:", error.code);
-      console.error("Hata Mesajı:", error.message);
-      
-      let errorMsg = "Proje silinemedi.";
-      if (error.code === 'permission-denied') {
-        errorMsg = "Hata: Yetkiniz yok (Permission Denied). Lütfen kuralları kontrol edin.";
+        if (response.ok && result.success) {
+          setExistingProjects(prev => prev.filter(p => String(p.id) !== String(projectId)));
+          alert("Başarılı: Proje hem ekrandan hem de sunucudaki veri dosyasından silindi.");
+        } else {
+          throw new Error(result.error || result.message || 'Sunucu silme işlemini reddetti.');
+        }
+      } catch (error: any) {
+        console.error("KRİTİK SİLME HATASI:", error);
+        alert(`Silme işlemi başarısız: ${error.message || 'Sunucuya ulaşılamadı.'}\nLütfen sayfayı yenileyip tekrar deneyin.`);
+      } finally {
+        setLoading(false);
       }
-      
-      alert(`${errorMsg}\n\nKod: ${error.code || 'Bilinmeyen'}\nMesaj: ${error.message || ''}`);
-    } finally {
-      setLoading(false);
+    } else {
+      console.log("Silme iptal edildi.");
     }
   };
 
@@ -278,35 +266,37 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
                   <Plus className="w-6 h-6 text-brand-primary" />
                   {editingId ? 'Projeyi Düzenle' : 'Yeni Proje Ekle'}
                 </div>
-                {editingId ? (
-                  <button 
-                    onClick={() => {
-                      setEditingId(null);
-                      setFormData({
-                        title: '',
-                        description: '',
-                        image: '',
-                        tags: '',
-                        github: '',
-                        link: '',
-                        isExternal: true
-                      });
-                    }}
-                    className="text-xs text-slate-500 hover:text-white transition-colors underline decoration-dotted"
-                  >
-                    Vazgeç
-                  </button>
-                ) : (
-                  <button 
-                    onClick={() => {
-                      setIsAuthenticated(false);
-                      sessionStorage.removeItem('isAdminAuthenticated');
-                    }}
-                    className="text-xs text-red-500/50 hover:text-red-500 transition-colors"
-                  >
-                    Güvenli Çıkış
-                  </button>
-                )}
+                <div className="flex items-center gap-4">
+                  {editingId ? (
+                    <button 
+                      onClick={() => {
+                        setEditingId(null);
+                        setFormData({
+                          title: '',
+                          description: '',
+                          image: '',
+                          tags: '',
+                          github: '',
+                          link: '',
+                          isExternal: true
+                        });
+                      }}
+                      className="text-xs text-slate-500 hover:text-white transition-colors underline decoration-dotted"
+                    >
+                      Vazgeç
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => {
+                        setIsAuthenticated(false);
+                        sessionStorage.removeItem('isAdminAuthenticated');
+                      }}
+                      className="text-xs text-red-500/50 hover:text-red-500 transition-colors"
+                    >
+                      Güvenli Çıkış
+                    </button>
+                  )}
+                </div>
               </h2>
               <form onSubmit={handleAddProject} className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2 space-y-2">
@@ -429,7 +419,7 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
                       </button>
                       <button 
                         type="button"
-                        onClick={(e) => handleDelete(e, proj)}
+                        onClick={(e) => handleDelete(e, proj.id)}
                         className="p-2 text-slate-500 hover:text-red-500 transition-colors cursor-pointer"
                         title="Sil"
                       >
