@@ -173,45 +173,59 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
     e.preventDefault();
     e.stopPropagation();
     
-    console.log("Silme başladı", project);
-    console.log("Silinecek ID:", project.id);
+    console.log("Silme işlemi tetiklendi. Proje verisi:", project);
+    const projectId = project.id;
+    console.log("Hedef Document ID:", projectId);
 
-    if (!project.id) {
-      console.error("HATA: project.id yok. Firestore document ID eklenmemiş.");
-      alert("Hata: Proje ID bulunamadı.");
+    if (!projectId) {
+      console.error("HATA: project.id undefined veya null. Firestore document ID eksik!");
+      alert("Hata: Proje ID bulunamadı. Silme işlemi durduruldu.");
       return;
     }
 
-    const ok = window.confirm("Bu projeyi silmek istediğine emin misin?");
+    const ok = window.confirm(`"${project.title || 'Bu projeyi'}" silmek istediğinize emin misiniz?`);
     if (!ok) return;
     
     setLoading(true);
     
     try {
-      // 1. Global projects'den sil
-      await deleteDoc(doc(db, "projects", project.id));
+      // 1. Global projects koleksiyonundan silmeyi dene
+      console.log("Global 'projects' koleksiyonundan silme isteği gönderiliyor...");
+      const globalRef = doc(db, "projects", projectId);
+      await deleteDoc(globalRef);
+      console.log("Global deleteDoc tamamlandı:", projectId);
 
-      // 2. Kullanıcı alt koleksiyonundan sil (Eğer UID varsa)
+      // 2. Kullanıcı alt koleksiyonundan silmeyi dene (Eğer veri varsa)
       const uidFromProject = project.uid || project.userId;
       if (uidFromProject) {
-        console.log(`Kullanıcı (${uidFromProject}) alt koleksiyonundan da siliniyor...`);
+        console.log(`Kullanıcı (${uidFromProject}) alt koleksiyonu taranıyor...`);
         try {
-          await deleteDoc(doc(db, "users", uidFromProject, "projects", project.id));
-        } catch (subErr) {
-          console.warn("Alt koleksiyon silme hatası (önemsiz olabilir):", subErr);
+          const userProjectRef = doc(db, "users", uidFromProject, "projects", projectId);
+          await deleteDoc(userProjectRef);
+          console.log("Alt koleksiyon deleteDoc tamamlandı.");
+        } catch (subErr: any) {
+          console.warn("Alt koleksiyon silinirken hata oluştu (Kayıt olmayabilir):", subErr.message);
         }
       }
 
-      // 3. UI listesinden kaldır (Optimistic update or local sync)
+      // 3. UI listesinden kaldır (Optimistic update)
       if (setExistingProjects) {
-        setExistingProjects(prev => prev.filter(p => p.id !== project.id));
+        setExistingProjects(prev => prev.filter(p => p.id !== projectId));
       }
 
-      console.log("Proje Firestore’dan başarıyla silindi:", project.id);
+      console.log("SİLME BAŞARILI. ID:", projectId);
       alert("Proje başarıyla silindi!");
     } catch (error: any) {
-      console.error("Firestore silme hatası:", error);
-      alert("Proje silinemedi. Console hatasına bak.");
+      console.error("Firestore silme hatası yakalandı!", error);
+      console.error("Hata Kodu:", error.code);
+      console.error("Hata Mesajı:", error.message);
+      
+      let errorMsg = "Proje silinemedi.";
+      if (error.code === 'permission-denied') {
+        errorMsg = "Hata: Yetkiniz yok (Permission Denied). Lütfen kuralları kontrol edin.";
+      }
+      
+      alert(`${errorMsg}\n\nKod: ${error.code || 'Bilinmeyen'}\nMesaj: ${error.message || ''}`);
     } finally {
       setLoading(false);
     }

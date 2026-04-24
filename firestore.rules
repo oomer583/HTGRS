@@ -15,13 +15,14 @@ service cloud.firestore {
       // Ideally, this should be restricted via Firebase Auth for real production use.
       allow create: if isValidProject(request.resource.data);
       allow update: if isValidProject(request.resource.data);
-      allow delete: if true; // In a real app, restrict this
+      allow delete: if true;
     }
 
     // Users and their projects
     match /users/{uid}/projects/{projectId} {
       allow read: if true;
-      allow write: if true; // In a real app, restrict to owner or admin
+      allow write: if true;
+      allow delete: if true;
     }
 
     function isValidProject(data) {
