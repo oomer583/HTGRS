@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { X, Lock, Plus, Trash2, Layout, Image as ImageIcon, Type, AlignLeft, Pencil } from 'lucide-react';
-import { collection, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDocs, query, collectionGroup, where } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDocs, query, collectionGroup, where, getDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import firebaseConfig from '../../firebase-applet-config.json';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface AdminModalProps {
@@ -189,23 +190,31 @@ export function AdminModal({ isOpen, onClose, existingProjects, setExistingProje
     setLoading(true);
     
     try {
+      console.log("--- DEBUG SİLME ÖNCESİ ---");
+      console.log("Firebase projectId:", firebaseConfig.projectId);
+      console.log("Firestore databaseId:", firebaseConfig.firestoreDatabaseId || "(default)");
+      console.log("Hedef Document ID:", projectId);
+      console.log("Silinen path:", `projects/${projectId}`);
+      console.log("--------------------------");
+
       // 1. Global projects koleksiyonundan silmeyi dene
-      console.log("Global 'projects' koleksiyonundan silme isteği gönderiliyor...");
       const globalRef = doc(db, "projects", projectId);
       await deleteDoc(globalRef);
-      console.log("Global deleteDoc tamamlandı:", projectId);
+      console.log("Global deleteDoc tamamlandı. Doğrulama yapılıyor...");
+      
+      // VERIFICATION
+      const checkDoc = await getDoc(globalRef);
+      console.log("Global silme sonrası döküman var mı?", checkDoc.exists());
 
       // 2. Kullanıcı alt koleksiyonundan silmeyi dene (Eğer veri varsa)
       const uidFromProject = project.uid || project.userId;
       if (uidFromProject) {
         console.log(`Kullanıcı (${uidFromProject}) alt koleksiyonu taranıyor...`);
-        try {
-          const userProjectRef = doc(db, "users", uidFromProject, "projects", projectId);
-          await deleteDoc(userProjectRef);
-          console.log("Alt koleksiyon deleteDoc tamamlandı.");
-        } catch (subErr: any) {
-          console.warn("Alt koleksiyon silinirken hata oluştu (Kayıt olmayabilir):", subErr.message);
-        }
+        const userProjectRef = doc(db, "users", uidFromProject, "projects", projectId);
+        await deleteDoc(userProjectRef);
+        
+        const checkUserDoc = await getDoc(userProjectRef);
+        console.log("Alt koleksiyon silme sonrası döküman var mı?", checkUserDoc.exists());
       }
 
       // 3. UI listesinden kaldır (Optimistic update)
